@@ -1,0 +1,186 @@
+package frc.robot;
+
+import java.io.File;
+
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.auto.NamedCommands;
+import com.pathplanner.lib.util.FlippingUtil;
+
+import edu.wpi.first.wpilibj.Filesystem;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
+
+import frc.robot.constants.Constants.OperatorConstants;
+import frc.robot.Codigo.MotorNeo;
+import frc.robot.Codigo.Primario;
+import frc.robot.Codigo.Visao.ComandosVisao;
+import frc.robot.Codigo.Visao.FotoPC;
+import frc.robot.Codigo.Ajustes.AjustarDistanciaParede;
+import frc.robot.Codigo.Ajustes.Freio;
+import frc.robot.Codigo.Ajustes.SeguirAlvo;
+import frc.robot.Codigo.Ajustes.AproximarComMira;
+import frc.robot.commands.swervedrive.drivebase.DriveRelativeTranslationCommand;
+import frc.robot.subsystems.Mechanisms.ElevatorSubsystem;
+import frc.robot.subsystems.Mechanisms.GarraIntakeSubsystem;
+import frc.robot.subsystems.drive.swervedrive.SwerveSubsystem;
+
+import swervelib.SwerveInputStream;
+
+// ============ CONTROLE DO OPERADOR ============
+// Inicializa o controle Xbox utilizado para comandar a movimentação do robô.
+public class RobotContainer {
+
+        private final CommandXboxController m_Controller = new CommandXboxController(0);
+        public final Primario primario = new Primario();
+        public final ElevatorSubsystem m_Elevator = new ElevatorSubsystem();
+        public final GarraIntakeSubsystem m_intake = new GarraIntakeSubsystem();
+        
+
+        // ============ SUBSISTEMA SWERVE ============
+        // Carrega a configuração dos módulos swerve localizada em deploy/swerve/neo.
+        // O construtor do SwerveSubsystem também configura o AutoBuilder do
+        // PathPlanner.
+        private final SwerveSubsystem drivebase = new SwerveSubsystem(
+                        new File(
+                                        Filesystem.getDeployDirectory(),
+                                        "swerve/neo"));
+
+        // ============ SELETOR DE AUTÔNOMO ============
+        // Lista no dashboard os autos criados no PathPlanner (pasta
+        // deploy/pathplanner/autos).
+        // É preenchido em configureAutonomous() e lido em getAutonomousCommand().
+        private SendableChooser<Command> autoChooser;
+
+        // ============ TAMANHO DA ARENA (PROVISÓRIO) ============
+        // Dimensões do campo do ECOSYNC (14 m x 6 m), usadas para espelhar os paths na
+        // aliança vermelha.
+        // Mover para um FieldConstants quando ele existir.
+        private static final double FIELD_LENGTH_METERS = 14.0;
+        private static final double FIELD_WIDTH_METERS = 6.0;
+
+        // ============ CONDUÇÃO POR VELOCIDADE ANGULAR ============
+        // Utiliza o joystick esquerdo para translação e o eixo horizontal direito para
+        // rotação.
+        SwerveInputStream driveAngularVelocity = SwerveInputStream.of(drivebase.getSwerveDrive(),
+                        () -> -m_Controller.getLeftY() * Freio.fator(m_Controller.getLeftTriggerAxis(), 0.2),
+                        () -> -m_Controller.getLeftX() * Freio.fator(m_Controller.getLeftTriggerAxis(), 0.2))
+                        .withControllerRotationAxis(m_Controller::getRightX)
+                        .deadband(OperatorConstants.DEADBAND)
+                        .scaleRotation(.4)
+                        .allianceRelativeControl(true);
+
+        // ============ CONDUÇÃO POR ÂNGULO DIRETO ============
+        // Utiliza o joystick direito para definir a orientação desejada do robô.
+        public final SwerveInputStream driveDirectAngle = driveAngularVelocity.copy()
+                        .withControllerHeadingAxis(
+                                        () -> -m_Controller.getRightX(),
+                                        () -> -m_Controller.getRightY())
+                        .headingWhile(true)
+                        .scaleRotation(6)
+                        .scaleTranslation(.6);
+
+        // ============ CONSTRUTOR ============
+        // Configura o tamanho do campo, os controles e o autônomo, nesta ordem.
+        // O autônomo vem depois do swerve porque o AutoBuilder precisa já estar
+        // configurado.
+        public RobotContainer() {
+                configureFieldSize();
+                configureBindings();
+                configureAutonomous();
+
+                DriverStation.silenceJoystickConnectionWarning(true);
+        }
+
+        // ============ CONFIGURAÇÃO DO TAMANHO DO CAMPO ============
+        // Informa ao PathPlanner o tamanho real da arena; o padrão dele é o campo
+        // oficial da FIRST.
+        // Sem isso, os paths da aliança vermelha são espelhados no lugar errado.
+        private void configureFieldSize() {
+                FlippingUtil.fieldSizeX = FIELD_LENGTH_METERS;
+                FlippingUtil.fieldSizeY = FIELD_WIDTH_METERS;
+
+                // Rotacional = o lado vermelho é o azul girado 180°. É o que a planta parece
+                // indicar;
+                // confirmar com a organização. Se for espelhado, trocar por
+                // FieldSymmetry.kMirrored.
+                FlippingUtil.symmetryType = FlippingUtil.FieldSymmetry.kRotational;
+        }
+
+
+
+        // ============ CONFIGURAÇÃO DOS CONTROLES ============
+        private void configureBindings() {
+
+                // ============ CONDUÇÃO PADRÃO ============
+                drivebase.setDefaultCommand(
+                                drivebase.driveFieldOriented(driveDirectAngle));
+
+
+                m_Controller.leftTrigger().whileTrue(
+                m_intake.setRPM(500)
+        );
+
+                m_Controller.rightTrigger().whileTrue(
+                m_intake.setRPM(-500)
+        );
+
+                m_Controller.x().onTrue(
+                m_Elevator.goToHeightCommand(30));
+
+
+        }
+
+        // ============ TELEMETRIA DA POSE ============
+        // Chamado pelo Robot.robotPeriodic() para atualizar a pose no Elastic a cada
+        // ciclo.
+        public void publicarPose() {
+                SmartDashboard.putNumber("pose robox ", drivebase.getPose().getX());
+                SmartDashboard.putNumber("pose roboy ", drivebase.getPose().getY());
+                SmartDashboard.putNumber("pose rotacao ", drivebase.getPose().getRotation().getDegrees());
+                SmartDashboard.putBoolean("Mira/Vendo objeto", ComandosVisao.vendoAlvo(primario.camera));
+        }
+
+        // ============ CONFIGURAÇÃO DO AUTÔNOMO ============
+        // Registra os comandos nomeados e cria o seletor de autônomo no dashboard.
+        // Os comandos nomeados precisam ser registrados ANTES de criar o seletor.
+        private void configureAutonomous() {
+
+                // ============ COMANDOS NOMEADOS ============
+                // Permitem usar ações do robô dentro dos autos do PathPlanner, pelo nome.
+                // "test" só imprime no console; os comandos de intake e elevador entram aqui
+                // depois.
+                NamedCommands.registerCommand("test", Commands.print("Comando nomeado 'test' executado"));
+
+                // ============ SELETOR NO DASHBOARD ============
+                // Se o AutoBuilder foi configurado, monta o seletor com os autos do
+                // PathPlanner.
+                // Se não (por exemplo, settings.json ausente), mostra uma opção "Nenhum" para
+                // não quebrar.
+                if (AutoBuilder.isConfigured()) {
+                        autoChooser = AutoBuilder.buildAutoChooser();
+                } else {
+                        autoChooser = new SendableChooser<>();
+                        autoChooser.setDefaultOption("Nenhum (PathPlanner nao configurado)", Commands.none());
+                }
+
+                SmartDashboard.putData("Auto Chooser", autoChooser);
+        }
+
+        // ============ COMANDO AUTÔNOMO ============
+        // Retorna o auto escolhido no seletor do dashboard.
+        // Chamado pelo Robot.java ao iniciar o período autônomo.
+        public Command getAutonomousCommand() {
+                return autoChooser.getSelected();
+        }
+
+        // ============ FREIO DOS MOTORES ============
+        // Define se os motores de movimentação devem permanecer em modo de frenagem.
+        public void setMotorBrake(boolean brake) {
+                drivebase.setMotorBrake(brake);
+        }
+}

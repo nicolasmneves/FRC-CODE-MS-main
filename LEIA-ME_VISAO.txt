@@ -1,0 +1,150 @@
+VISAO HSV + ELASTIC -- hsvrobot (WPILib 2026)
+=============================================
+
+ONDE ESTA CADA COISA
+  src/main/java/frc/robot/
+    Robot.java                 robotPeriodic chama o RobotContainer.periodic()
+    RobotContainer.java        cria o Primario; autonomo de exemplo com visao
+    Codigo/
+      Primario.java            cria a camera e a dashboard; config inicial da visao
+      Dashboard/Dashboard.java tudo que vai para o Elastic (leitura e controles)
+      Visao/
+        CvCamera.java          camera USB + deteccao HSV (thread propria)
+        ComandosVisao.java     comandos prontos (trocar perfil, esperar alvo...)
+        HSVdetection/
+          VisionProfilesFactory.java  ONDE VOCE CADASTRA cores e perfis
+          VisionObject.java    um objeto/cor
+          VisionProfile.java   um perfil (objetos + filtros)
+          HsvRange.java        uma faixa HSV
+          Deteccao.java        um objeto achado no frame
+  src/main/deploy/Visao/*.json faixas HSV do app de calibracao
+
+
+USO RAPIDO
+  1. Plugue a camera USB no roboRIO e faca o deploy.
+  2. Abra o Elastic (secao ELASTIC abaixo).
+  3. Escolha o perfil em Visao/Config/Perfil.
+  Pronto: o stream mostra o contorno dos objetos e Visao/Alvo mostra o alvo.
+
+
+CADASTRAR UMA COR (VisionProfilesFactory.java)
+  Objeto:
+    new VisionObject("nome", new Scalar(B, G, R), areaMin, areaMax)
+        .addHsvFromJson(HSV_DIR + "arquivo.json")        // faixas do JSON
+        .addHsvRange(hmin, smin, vmin, hmax, smax, vmax); // e/ou faixa manual
+
+  - Cor do contorno em BGR (Azul, Verde, Vermelho).
+  - Areas em pixels medidas em 320x240.
+  - HSV no padrao OpenCV: H 0..179, S 0..255, V 0..255.
+  - Vermelho precisa de 2 faixas (perto de H=0 e perto de H=179).
+  - Varias faixas manuais de uma vez:
+      .addHsvRanges(new double[] {0, 120, 70, 10, 255, 255},
+                    new double[] {170, 120, 70, 179, 255, 255})
+
+  Perfil: coloque o objeto num perfil (p.addObject(...)).
+  Perfil novo: registre em catalogo() para aparecer no Elastic.
+
+
+USAR NO CODIGO
+  CvCamera cam = robotContainer.getPrimario().camera;
+
+  cam.temAlvo()                 tem alvo?
+  cam.getObjetoDetectado()      nome do alvo
+  cam.getErroXNormalizado()     -1 (esquerda) .. 0 (centro) .. +1 (direita)
+  cam.getProfundidade()         distancia estimada em mm (-1 sem alvo)
+  cam.getPosicaoLateralCentro() mm, + direita
+  cam.getDeteccoes()            todos os objetos do frame
+  cam.contarObjetos("azul")     quantos "azul" na tela
+  cam.getIdadeResultado()       idade do resultado em s (> 0.3 = nao confie)
+
+  cam.setPerfilManager(VisionProfilesFactory.perfilGeral());
+  cam.setModoAlvo(CvCamera.ModoAlvo.MAIOR);   // ESQUERDA, CENTRO, DIREITA, MAIOR
+  cam.setSeletorAlvo("azul");                 // "" = qualquer
+  cam.setRoiBlocos(CvCamera.BlocoROI.INFERIOR_CENTRO);  // processa so essa area
+  cam.setExposicaoManual(30);                 // cores estaveis
+
+  Comandos (ComandosVisao):
+    ComandosVisao.perfil(cam, VisionProfilesFactory.perfilGeral())
+    ComandosVisao.esperarAlvo(cam, 3.0)
+    ComandosVisao.esperarObjeto(cam, "azul", 2.0)
+    ComandosVisao.seletor(cam, "azul")
+    ComandosVisao.modoAlvo(cam, CvCamera.ModoAlvo.MAIOR)
+
+  Alinhar (controle P):
+    if (ComandosVisao.vendoAlvo(cam)) giro = 0.4 * cam.getErroXNormalizado();
+
+  Coordenadas: (0,0) = centro da imagem, X+ direita, Y+ cima.
+
+
+ELASTIC
+  Conectar: Settings -> Network -> IP Address Mode "Team Number" (10019)
+  ou "Driver Station". O rodape fica verde quando conecta.
+
+  Camera:
+    Add Widget -> CameraPublisher -> VisaoHSV (widget Camera Stream).
+    Mostra so o contorno de cada objeto, na cor do objeto.
+
+  Valores (Add Widget -> SmartDashboard -> Visao):
+    Status/   Perfil, Modo Alvo, Rodando, FPS, Tempo ms, Idade s, Resolucao, Erro
+    Alvo/     Tem Alvo, Nome, Erro X, Profundidade mm, Lateral mm,
+              Vertical mm, X px, Y px, Area px
+    Scan/     Total, Objetos (lista "nome | X Y A")
+
+    Sugestao: Tem Alvo -> Boolean Box; Erro X -> Graph; resto -> Text Display.
+
+  Controles (Visao/Config, editaveis no Elastic):
+    Perfil              lista (ComboBox Chooser) -- troca o perfil ativo
+    Modo Alvo           lista: ESQUERDA, CENTRO, DIREITA, MAIOR
+    Seletor Alvo        texto: nome do objeto ("" = qualquer)
+    Stream Ligado       toggle: desligar economiza CPU
+    Mascara             texto: nome do objeto -> stream mostra a mascara
+                        preto/branco (calibrar HSV). Vazio = normal.
+    Exposicao (-1 auto) numero 0..100, -1 = automatica
+
+  Mudar pelo codigo tambem atualiza os campos de texto/numero/toggle.
+  Salve o layout no Elastic depois de montar.
+
+
+CALIBRAR
+  1. Exposicao manual (Elastic ou cam.setExposicaoManual) igual a usada no app.
+  2. Mascara = nome do objeto: branco = pixel aceito.
+     Buracos -> alargue faixas ou aumente morph. Fundo branco -> estreite.
+  3. Ajuste areaMin/areaMax olhando Scan/Objetos.
+  4. Profundidade: cam.setKProfundidade(distanciaMm * larguraPx) (largura em 320).
+
+
+DESEMPENHO NO roboRIO
+  Ja configurado em Primario: 320x240 a 15 FPS.
+  Mais leve: cam.setQualidade160(), cam.setFps(10), stream desligado,
+  menos objetos no perfil, ROI so onde o objeto aparece,
+  perfil Desativado quando nao estiver procurando.
+  Confira no Elastic: Visao/Status/Tempo ms e FPS.
+
+
+PROBLEMAS
+  Nada no Elastic       -> Elastic so conecta em WPILib 2023+ (este projeto e 2026).
+  Sem stream            -> camera USB conectada? Visao/Status/Erro mostra o motivo.
+  Nao detecta           -> perfil certo? mascara branca? exposicao igual a calibracao?
+  Ruido                 -> suba areaMin, blur 3, morph 3-4, use ROI.
+  JSON nao carrega      -> arquivo em src/main/deploy/Visao/ e deploy refeito
+                           (console do Driver Station mostra "[Visao] ...").
+
+
+LIDAR-LITE v3 (I2C)
+  Arquivo: Codigo/Sensores/LidarLiteV3.java  (criado no Primario)
+  Fluxo:   Robot() -> new Primario() | robotInit -> primario.init()
+           robotPeriodic -> primario.periodic()  (le o lidar e atualiza o Elastic)
+
+  Ligacao: 5V (vermelho) num pino 5V (DIO/PWM/MXP -- o conector I2C so tem 3.3V),
+           GND preto, SCL verde, SDA azul, laranja e amarelo sem ligar.
+           Capacitor 680 uF entre 5V e GND perto do sensor (recomendado).
+
+  Codigo:  primario.lidar.getDistanciaMm()   distancia em mm (-1 sem leitura)
+           primario.lidar.temLeitura()       leitura valida e recente
+           primario.lidar.setOffsetMm(x)     correcao de calibracao
+
+  Elastic: SmartDashboard/Sensores/Lidar/
+           Distancia mm (Graph/Text), Conectado e Leitura OK (Boolean Box),
+           Leituras e Erros (contadores).
+
+  Porta MXP em vez da onboard: new LidarLiteV3(I2C.Port.kMXP) no Primario.
