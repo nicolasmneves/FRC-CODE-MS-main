@@ -1,4 +1,4 @@
-package frc.robot.subsystems.mechanisms;
+package frc.robot.subsystems.Mechanisms;
 
 import com.revrobotics.PersistMode;
 import com.revrobotics.RelativeEncoder;
@@ -32,8 +32,7 @@ public class ElevatorSubsystem extends SubsystemBase {
     private static final double MAX_HEIGHT_CM = 100.0;
     private static final double TOLERANCE_CM = 1.0;
 
-    // Soft limits: o encoder é zerado no boot, então o elevador DEVE
-    // começar embaixo (altura 0) para que isso seja seguro.
+ 
     private static final boolean ENABLE_SOFT_LIMITS = true;
 
     // ---------------- Hardware ----------------
