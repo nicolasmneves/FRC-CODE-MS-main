@@ -16,15 +16,9 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 
 import frc.robot.constants.Constants.OperatorConstants;
-import frc.robot.Codigo.MotorNeo;
 import frc.robot.Codigo.Primario;
 import frc.robot.Codigo.Visao.ComandosVisao;
-import frc.robot.Codigo.Visao.FotoPC;
-import frc.robot.Codigo.Ajustes.AjustarDistanciaParede;
 import frc.robot.Codigo.Ajustes.Freio;
-import frc.robot.Codigo.Ajustes.SeguirAlvo;
-import frc.robot.Codigo.Ajustes.AproximarComMira;
-import frc.robot.commands.swervedrive.drivebase.DriveRelativeTranslationCommand;
 import frc.robot.subsystems.Mechanisms.ElevatorSubsystem;
 import frc.robot.subsystems.Mechanisms.GarraIntakeSubsystem;
 import frc.robot.subsystems.drive.swervedrive.SwerveSubsystem;
@@ -131,6 +125,12 @@ public class RobotContainer {
 
                 m_Controller.x().onTrue(
                 m_Elevator.goToHeightCommand(30));
+
+                m_Controller.y().onTrue(
+                m_Elevator.goToHeightCommand(60));
+
+                m_Controller.b().onTrue(
+                m_Elevator.goToHeightCommand(90));
 
 
         }
