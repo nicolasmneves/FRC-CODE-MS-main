@@ -37,6 +37,34 @@ public final class Constants
 
     // Hold time on motor brakes when disabled
     public static final double WHEEL_LOCK_TIME = 10; // seconds
+
+    // kV da rotação (Kraken X60, MK4i 150/7): volts por rotação/s do MÓDULO.
+    // O JSON do YAGSL não tem kV; o SwerveSubsystem aplica este valor no Slot0 dos TalonFX de rotação.
+    // Teórico: 12 V / (100 rot/s do rotor / 21,43) ≈ 2,57, MAS no Motion Magic do Phoenix 6 o kD age no
+    // erro de velocidade e também empurra como feedforward: o efetivo é kV + kD. Medido em 18/11/2026:
+    // kV 2,4 + kD 0,5 dava 30-40° de overshoot; kV 1,5 + kD 0,5 (≈2,0 efetivo) deu ~2° de overshoot.
+    public static final double STEER_KV = 1.5;
+
+    // Limites de corrente da rotação (A). O YAGSL só aplica o "currentLimit.angle" do JSON como SUPPLY;
+    // estes valores sobrescrevem supply e stator dos TalonFX de rotação no construtor do SwerveSubsystem.
+    public static final double STEER_SUPPLY_LIMIT = 40;
+    public static final double STEER_STATOR_LIMIT = 120;
+
+    // Perfil Motion Magic da rotação, em rot/s e rot/s² do MÓDULO (o YAGSL usa 4,67 e 46,7).
+    public static final double STEER_MM_CRUISE = 4.67;
+    public static final double STEER_MM_ACCEL = 46.7;
+
+    // Limite de aceleração do GIRO DO CHASSI (rad/s²), aplicado ao analógico direito no teleop.
+    // SUBIDA: quanto a velocidade angular pode crescer por segundo (corta o pico de corrente que
+    // fazia o giro travar com bateria fraca). DESCIDA: quanto pode cair (frear perto do alvo).
+    public static final double GIRO_SUBIDA = 5;
+    public static final double GIRO_DESCIDA = 45;
+
+    // Roll de montagem do Pigeon 2 (graus). O Pigeon tinha roll 180 gravado na memória dele, o que
+    // invertia o yaw (medido em 18/11/2026: girando no sentido HORÁRIO, visto de cima, o yaw SUBIA).
+    // Com roll 180 o Pigeon lê gravidade +1 (yaw "puro"), e aí o invertedIMU do swervedrive.json
+    // consegue inverter o yaw. Aplicado no Pigeon pelo SwerveSubsystem a cada inicialização.
+    public static final double PIGEON_MOUNT_ROLL = 180;
   }
 
   public static class OperatorConstants

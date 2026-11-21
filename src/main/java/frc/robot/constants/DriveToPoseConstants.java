@@ -2,6 +2,8 @@ package frc.robot.constants;
 
 import edu.wpi.first.math.util.Units;
 
+// ============ CONSTANTES DO DriveToPose ============
+// PID e limites (velocidade/aceleração) para levar o robô até uma pose do campo.
 public final class DriveToPoseConstants {
     public final class TranslationPID{
         public static final double KP = 5.0;

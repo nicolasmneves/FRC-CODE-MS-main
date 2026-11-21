@@ -35,6 +35,14 @@ public class Robot extends TimedRobot
     // Fica null enquanto nenhum autônomo foi iniciado.
     private Command m_autonomousCommand;
 
+    private Command m_steerTuning;
+
+    // Vira true no primeiro enable (auto, teleop ou test); depois disso o rumo não é mais
+    // realinhado automaticamente pela aliança (só pelo botão Start).
+    private boolean m_jaHabilitou = false;
+
+    private double m_ultimoCiclo = 0;
+
     // ============ ROBOTCONTAINER =================
     // Contém os subsistemas, os botões e o seletor de autônomo.
     // É criado no robotInit().
@@ -103,6 +111,25 @@ public class Robot extends TimedRobot
     {
         CommandScheduler.getInstance().run();
 
+        // Diagnóstico de energia e de tempo do laço (para investigar travadas no giro):
+        // tensão da bateria, se o roboRIO entrou em brownout (corta as saídas) e o intervalo
+        // real entre ciclos (o normal é ~20 ms; picos indicam laço atrasado).
+        double agora = Timer.getFPGATimestamp();
+        if (m_ultimoCiclo > 0)
+        {
+            edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.putNumber("Robo/LacoMs", (agora - m_ultimoCiclo) * 1000);
+        }
+        m_ultimoCiclo = agora;
+        edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.putNumber("Robo/BateriaV",
+            edu.wpi.first.wpilibj.RobotController.getBatteryVoltage());
+        edu.wpi.first.wpilibj.smartdashboard.SmartDashboard.putBoolean("Robo/Brownout",
+            edu.wpi.first.wpilibj.RobotController.isBrownedOut());
+
+        if (isEnabled())
+        {
+            m_jaHabilitou = true;
+        }
+
         // Le o LIDAR e atualiza o Elastic (visao roda na propria thread).
         m_robotContainer.primario.periodic();
         m_robotContainer.publicarPose();
@@ -132,6 +159,11 @@ public class Robot extends TimedRobot
     @Override
     public void disabledPeriodic()
     {
+        // Antes do primeiro enable, acompanha a aliança do DS para definir o rumo inicial.
+        if (!m_jaHabilitou)
+        {
+            m_robotContainer.alinharRumoComAlianca();
+        }
         if (disabledTimer.hasElapsed(Constants.DrivebaseConstants.WHEEL_LOCK_TIME))
         {
             m_robotContainer.setMotorBrake(false);
@@ -206,6 +238,20 @@ public class Robot extends TimedRobot
     public void testInit()
     {
         CommandScheduler.getInstance().cancelAll();
+        // Tuning do PID de rotação dos módulos (ver SteerTuningCommand).
+        m_steerTuning = m_robotContainer.getTestCommand();
+        m_steerTuning.schedule();
+    }
+
+    // ============ testExit() =================
+    // Ao sair do modo teste, encerra o tuning e devolve o swerve ao comando padrão.
+    @Override
+    public void testExit()
+    {
+        if (m_steerTuning != null)
+        {
+            m_steerTuning.cancel();
+        }
     }
 
     // ============ testPeriodic() =================

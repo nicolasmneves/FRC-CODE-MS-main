@@ -1,0 +1,84 @@
+TUNING DA ROTAÇÃO DO SWERVE (Kraken X60 + MK4i) — feito em 18/11/2026
+=====================================================================
+
+RESULTADO (bateria carregada, robô suspenso, degraus de 80°)
+  kP 100 | kD 0,5 | kS 0,1 (campo "f" do YAGSL) | kV 1,5
+  Motion Magic 4,67 rot/s e 46,7 rot/s² (padrão do YAGSL)
+  Supply 40 A | Stator 120 A
+  -> overshoot 0°, subida ~80 ms, acomodação ~140 ms, erro final < 1° nos 4 módulos.
+  Onde fica: deploy/swerve/neo/modules/pidfproperties.json (kP, kD, kS)
+             Constants.DrivebaseConstants (STEER_KV, limites de corrente, perfil)
+
+O QUE ESTAVA ERRADO (por que as rodas "giravam sem parar")
+  1. Os módulos estavam trocados nos JSON (CANcoder e posição de cada módulo não batiam
+     com a montagem física). Mapa FINAL (frente = intake), medido girando cada módulo à mão e
+     confirmado depois de corrigir o giroscópio (ver GIROSCÓPIO abaixo).
+        dianteiro esquerdo  drive 14  rotação 24  CANcoder 4
+        dianteiro direito   drive 11  rotação 21  CANcoder 3
+        traseiro esquerdo   drive 13  rotação 23  CANcoder 1
+        traseiro direito    drive 12  rotação 22  CANcoder 2
+     Offsets recalibrados com as rodas retas para a frente e as bevels para a ESQUERDA.
+  2. O código que estava no roboRIO era diferente do código desta pasta.
+  3. kV + kD alto demais: no Motion Magic do Phoenix 6 o kD age no erro de velocidade e
+     funciona também como feedforward (efetivo = kV + kD ≈ 2,0 V por rot/s do módulo).
+  4. Rampa de 0,25 s no motor de rotação (atrasava a malha) -> 0.
+  5. Supply de 20 A cortava o torque de frenagem -> 40 A.
+
+RUMO (ANALÓGICO DIREITO, MODO "APONTAR") — 18/11/2026
+  - O robô vira a frente para onde o analógico aponta (no campo) e para. Não é "90° por toque".
+  - Corrigido: o YAGSL gira o analógico esquerdo 180° na aliança vermelha, mas não o rumo do
+    direito; o RobotContainer agora faz isso (sinalAlianca()).
+  - Corrigido: rumo inicial era sempre 180°; agora segue a aliança do DS antes do primeiro enable
+    (azul 0°, vermelho 180°), com o robô de frente para LONGE do piloto. Start = rezerar o rumo.
+  - PID de rumo (controllerproperties.json): kP 1,0 / kD 0,05 (era 0,4 / 0,01).
+    Degrau de 90°: overshoot <= 2,5°, acomodação ~1 s, erro final < 0,5°.
+  - GIRO TRAVANDO = BROWNOUT. Sem limite, cada giro de 90° derrubava a bateria (10,4 V em repouso)
+    para 6,4 V e o roboRIO cortava as saídas (4 brownouts por teste). Solução: LimitadorGiro
+    (Constants GIRO_SUBIDA 5 / GIRO_DESCIDA 45 rad/s²) entre o analógico direito e o swerve.
+    Medido com a mesma bateria: 0 brownouts, mínimo 7,8-8,3 V, 0 trancos, 90° em ~0,85 s.
+    Telemetria: Robo/BateriaV, Robo/Brownout, Robo/LacoMs no dashboard.
+    Mesmo assim: bateria com 10,4 V em repouso está vazia ou com célula morta -> trocar/testar.
+  - Tuning: /Tuning/Mode = 1 e Test mode (robô no chão, gira no lugar).
+       GIRO_SUBIDA=5 GIRO_DESCIDA=45 ./nt.sh hstep 1.0 0.05 0 90 1 3   # mostra trancos/bateria/brownout
+       Se o nome .local falhar, use o IP: RIO=10.100.19.2 ./nt.sh ...
+       ./nt.sh set /Tuning/Mode 1
+       ./nt.sh hguard 0.15 20            # SEMPRE antes: giro de 20° com trava se girar invertido
+       ./nt.sh hstep 1.0 0.05 0 90 1 2.5 # kP kD deltaA deltaB ciclos seg
+
+ATENÇÃO
+  - Robô suspenso + controle de rumo (headingWhile) = rodas de tração giram sem parar, porque o
+    robô nunca chega no rumo pedido. Isso é esperado; teste a condução no chão.
+  - Bateria abaixo de 12 V muda muito a resposta. Faça tuning com bateria carregada.
+
+COMO REPETIR O TUNING
+  1. Robô suspenso, Driver Station em TEST + Enable (o Robot.testInit agenda o SteerTuningCommand).
+  2. Num Git Bash, nesta pasta:
+       ./nt.sh dump 1 /Tuning/Steer                      # mostra ganhos atuais
+       ./nt.sh step 100 0.5 0.1 1.5 0 80 3 1.5           # kP kD kS kV angA angB ciclos seg
+       ./nt.sh set /Tuning/Steer/SupplyLimitA 40         # muda um valor ao vivo
+       STEP_CSV=C:/caminho/saida.csv ./nt.sh step ...    # grava a curva
+     (usa o java do WPILib; o roboRIO é encontrado por roborio-10019-frc.local)
+  3. Copie os valores bons para pidfproperties.json / Constants e faça deploy.
+
+COMPILAR / DEPLOY
+  Projeto de trabalho: C:\FRC\FRC-CODE-MS (copiado do OneDrive em 19/11/2026; o GradleRIO
+  recusa compilar dentro do OneDrive). O robô usa roboRIO -> WPILib 2026 (Java 17, GradleRIO
+  2026.2.1). NÃO abra na WPILib 2027: ela é para o SystemCore, converte o projeto e apaga os
+  vendordeps (Phoenix, YAGSL, REV, PathPlanner).
+  Com a WPILib 2026 instalada: abra esta pasta no "WPILib VS Code 2026" e use Deploy Robot Code.
+  Sem ela: ./build_deploy.sh <pasta_do_JDK17> deploy  (fora do OneDrive compila direto aqui).
+
+GIROSCÓPIO (PIGEON 2) — 18/11/2026
+  - O rumo do YAGSL vinha com o SENTIDO INVERTIDO (giro horário aumentava o rumo). Isso fazia o
+    controle de rumo disparar ou, depois de uma correção errada nos módulos, trocar esquerda e
+    direita no analógico direito.
+  - O "invertedIMU" do swervedrive.json NÃO funciona neste Pigeon (o YAGSL inverte a rotação 3D
+    inteira e o sinal do yaw não muda). Também não adianta mexer só no Mount Pose.
+  - Solução: Pigeon2YawSwerve.java entrega ao YAGSL o yaw DIRETO do Pigeon (getYaw), que estava
+    certo em todos os testes; o SwerveSubsystem monta o swerve com esse IMU. Mount Pose roll 180
+    (Constants.PIGEON_MOUNT_ROLL) e invertedIMU false.
+  - Como conferir (robô desabilitado), num Git Bash nesta pasta:
+       ./nt.sh log 60 C:/temp/gyro.csv /SmartDashboard/Robo/PigeonYawDireto /SmartDashboard/Robo/YawYAGSL
+    e gire o robô à mão ~90° no sentido HORÁRIO visto de cima: os dois têm que DIMINUIR.
+  - Antes de qualquer tuning de rumo, rode ./nt.sh hguard 0.15 20 (trava se girar invertido).
+  - No Driver Station: ENTER desabilita; ESPAÇO é parada de emergência (exige reiniciar o robô).

@@ -105,3 +105,8 @@ wpi.java.configureTestTasks(test)
 tasks.withType(JavaCompile) {
     options.compilerArgs.add '-XDstringConcat=inline'
 }
+
+// Fontes com acentos em UTF-8 (evita "unmappable character" no Windows)
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+}

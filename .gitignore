@@ -188,3 +188,9 @@ compile_commands.json
 
 __pycache__/
 *.pyc
+
+# ---- extras deste projeto ----
+bin/
+ctre_sim/
+*.zip
+*.log
