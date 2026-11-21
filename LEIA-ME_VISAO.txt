@@ -3,20 +3,22 @@ VISAO HSV + ELASTIC -- hsvrobot (WPILib 2026)
 
 ONDE ESTA CADA COISA
   src/main/java/frc/robot/
-    Robot.java                 robotPeriodic chama o RobotContainer.periodic()
-    RobotContainer.java        cria o Primario; autonomo de exemplo com visao
-    Codigo/
-      Primario.java            cria a camera e a dashboard; config inicial da visao
-      Dashboard/Dashboard.java tudo que vai para o Elastic (leitura e controles)
-      Visao/
-        CvCamera.java          camera USB + deteccao HSV (thread propria)
-        ComandosVisao.java     comandos prontos (trocar perfil, esperar alvo...)
-        HSVdetection/
-          VisionProfilesFactory.java  ONDE VOCE CADASTRA cores e perfis
-          VisionObject.java    um objeto/cor
-          VisionProfile.java   um perfil (objetos + filtros)
-          HsvRange.java        uma faixa HSV
-          Deteccao.java        um objeto achado no frame
+    Robot.java                 robotPeriodic chama o primario.periodic()
+    RobotContainer.java        cria o Primario; botoes que usam a visao (pas traseiras)
+    Primario.java              cria camera, LIDAR, sensor da base e dashboard; config da visao
+    subsystems/Telemetry/elastic/Dashboard.java   tudo que vai para o Elastic
+    subsystems/Odometry/vision/
+      CvCamera.java            camera USB + deteccao HSV (thread propria)
+      hsv/
+        VisionProfilesFactory.java  ONDE VOCE CADASTRA cores e perfis
+        VisionObject.java      um objeto/cor
+        VisionProfile.java     um perfil (objetos + filtros)
+        HsvRange.java          uma faixa HSV
+        Deteccao.java          um objeto achado no frame
+    commands/vision/
+      ComandosVisao.java       comandos prontos (trocar perfil, esperar alvo...)
+      SeguirAlvo.java / AproximarComMira.java   mira no objeto / anda ate ele
+  tools/SalvarFotosPC.py       (no PC) salva fotos do stream
   src/main/deploy/Visao/*.json faixas HSV do app de calibracao
 
 
@@ -131,7 +133,7 @@ PROBLEMAS
 
 
 LIDAR-LITE v3 (I2C)
-  Arquivo: Codigo/Sensores/LidarLiteV3.java  (criado no Primario)
+  Arquivo: subsystems/Odometry/lidar/LidarLiteV3.java  (criado no Primario)
   Fluxo:   Robot() -> new Primario() | robotInit -> primario.init()
            robotPeriodic -> primario.periodic()  (le o lidar e atualiza o Elastic)
 

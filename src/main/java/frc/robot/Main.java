@@ -6,6 +6,8 @@ package frc.robot;
 
 import edu.wpi.first.wpilibj.RobotBase;
 
+// ============ MAIN ============
+// Ponto de entrada da JVM. Não mexa aqui: toda a lógica começa no Robot.java.
 public final class Main {
   private Main() {}
 
